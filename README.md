@@ -9,9 +9,9 @@ Coolify on Debian 12.
 2. In Coolify: **Sources → GitHub** → install the Coolify GitHub App for this repo.
 3. **New Resource → Docker Compose**, select the repo, branch `main`,
    base directory `/`, compose file `docker-compose.yaml`.
-4. Add the environment variables from `.env.example`. **`PACKETVER` must have
-   "Build Variable" enabled** — see Troubleshooting below. The two passwords
-   should stay runtime-only.
+4. Add the environment variables from `.env.example`. **`RO_PACKETVER` must
+   have "Build Variable" enabled** — note the name, see Troubleshooting. The
+   two passwords should stay runtime-only.
 5. Leave the FQDN / domain fields **empty** on both services. Ragnarok is raw
    TCP; if Traefik tries to route it, nothing will connect.
 6. Deploy. The first build takes 5–15 minutes — `make server` is the slow part.
@@ -155,23 +155,30 @@ MariaDB is not published — it is reachable only on the internal Coolify networ
 
 ## Troubleshooting
 
-### Build fails at `make server` with exit code 2
+### Build fails with an empty packetver
 
-Almost always an empty `PACKETVER`. Coolify passes build args by name only:
+Coolify passes build args by name only:
 
 ```
 --build-arg 'PACKETVER'
 ```
 
-which means "inherit from the environment". If the variable is not marked as a
-**Build Variable** in Coolify, it arrives empty. The `sed` then writes a bare
-`#define PACKETVER` with no value, every `#if PACKETVER >= ...` in the codebase
-becomes a preprocessor error, and the build dies roughly ten minutes in with no
-useful message.
+That form resolves from the *process* environment, while `--env-file
+build-time.env` only feeds interpolation in the compose file. When the name
+resolves to nothing, the CLI arg overrides the compose `args:` entry with an
+empty string — so a variable literally named `PACKETVER` cannot be relied on
+here, even with "Build Variable" enabled.
 
-Fix: Coolify → resource → Environment Variables → edit `PACKETVER` → enable
-**Build Variable**. The Dockerfile now validates this and fails in two seconds
-with a clear message instead.
+That is why the build arg is called **`RO_PACKETVER`**. Coolify does not know
+that name, so it never clobbers it. `PACKETVER` still works as an override for
+plain `docker build --build-arg PACKETVER=20211103 .`, and the Dockerfile falls
+back to `RO_PACKETVER` whenever it arrives empty.
+
+An empty packetver used to produce a bare `#define PACKETVER`, turning every
+`#if PACKETVER >= ...` into a preprocessor error and failing `make` with exit
+code 2 about ten minutes in. The build now prints `Building with
+PACKETVER=<value>` before compiling, so the resolved value is visible in the
+log.
 
 ### Getting the real build error
 

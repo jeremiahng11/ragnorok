@@ -23,7 +23,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        PACKETVER: ${PACKETVER}
+        RO_PACKETVER: ${RO_PACKETVER:-20180620}
         BUILD_JOBS: ${BUILD_JOBS:-}
     restart: unless-stopped
     depends_on:

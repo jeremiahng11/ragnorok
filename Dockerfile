@@ -1,5 +1,10 @@
 FROM debian:12-slim AS build
-ARG PACKETVER=20180620
+
+# RO_PACKETVER is the authoritative default. Coolify never touches this name,
+# so it cannot be clobbered to empty. PACKETVER is an optional override for
+# plain `docker build --build-arg PACKETVER=...`.
+ARG RO_PACKETVER=20180620
+ARG PACKETVER=
 # Lower this (e.g. 4) if g++ gets OOM-killed on map.cpp / skill.cpp / status.cpp.
 ARG BUILD_JOBS=
 
@@ -12,22 +17,22 @@ WORKDIR /opt
 RUN git clone --depth 1 https://github.com/rathena/rathena.git
 WORKDIR /opt/rathena
 
-# PACKETVER must be a YYYYMMDD date. If it arrives empty (a common Coolify
-# mistake — the variable must be marked as a BUILD variable, not runtime only)
-# the sed below would write a bare "#define PACKETVER" and every
-# "#if PACKETVER >= ..." in the codebase becomes a preprocessor error, ~10
-# minutes into the build. Fail in two seconds instead.
+# Coolify passes build args by name only (--build-arg 'PACKETVER'), which
+# resolves from the process environment and overrides the compose args: entry
+# with an empty string when it finds nothing. So never trust the arg directly —
+# fall back to the ARG default above if it arrives empty.
 RUN set -eux; \
-    case "${PACKETVER}" in \
+    PV="${PACKETVER:-}"; \
+    [ -n "$PV" ] || PV="${RO_PACKETVER}"; \
+    case "$PV" in \
       20[0-9][0-9][0-1][0-9][0-3][0-9]) ;; \
-      *) echo "FATAL: PACKETVER='${PACKETVER}' is not a YYYYMMDD date." >&2; \
-         echo "In Coolify, edit the PACKETVER env var and enable 'Build Variable'." >&2; \
-         exit 1 ;; \
+      *) echo "FATAL: PACKETVER='$PV' is not a YYYYMMDD date." >&2; exit 1 ;; \
     esac; \
-    sed -i "s|^[[:space:]]*#define PACKETVER .*|#define PACKETVER ${PACKETVER}|" \
+    echo "Building with PACKETVER=$PV"; \
+    sed -i "s|^[[:space:]]*#define PACKETVER .*|#define PACKETVER $PV|" \
       src/config/packets.hpp; \
-    grep -qx "#define PACKETVER ${PACKETVER}" src/config/packets.hpp; \
-    ./configure --enable-packetver="${PACKETVER}"; \
+    grep -qx "#define PACKETVER $PV" src/config/packets.hpp; \
+    ./configure --enable-packetver="$PV"; \
     make server -j"${BUILD_JOBS:-$(nproc)}"
 
 # ---------------------------------------------------------------------------
