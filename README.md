@@ -229,15 +229,24 @@ docker logs <db-container-name> 2>&1 | tail -40
 
 Common causes, in order of likelihood:
 
-1. **`DB_ROOT_PASSWORD` or `DB_PASSWORD` unset.** MariaDB refuses to initialise
-   without a root password and exits immediately, which compose reports only as
-   "unhealthy". Add both under Environment Variables in Coolify. Leave them as
-   runtime variables — do NOT mark them as build variables.
+1. **Empty `DB_ROOT_PASSWORD`.** MariaDB refuses to initialise without a root
+   password and crash-loops with "Database is uninitialized and password option
+   is not specified", which compose reports only as "unhealthy". The compose
+   file now has real fallback values so this cannot happen — but if you see it,
+   the passwords in Coolify are not reaching the container.
 2. **Schema import failed.** `20-import.sh` now logs each file as it imports and
    prints table counts, so `docker logs` will show exactly where it stopped.
    Expected on success: `ragnarok tables: 60`, `ragnarok_logs tables: 10`.
 3. **Import slower than the healthcheck grace period.** `start_period` is now
    180s. Failures during that window do not count against `retries`.
+
+**Change the default passwords.** The compose file falls back to
+`ragnarok_root_CHANGEME` / `ragnarok_CHANGEME` so the stack always starts.
+Set `DB_ROOT_PASSWORD` and `DB_PASSWORD` as runtime variables in Coolify to
+override, and use the same value for `DB_PASSWORD` in
+`conf/import/inter_conf.txt`. MariaDB is not published to the host — it is
+reachable only on the internal Docker network — so the exposure is limited,
+but do not leave the defaults in place.
 
 If the volume was created during a failed first run, the schema init will NOT
 re-run on the next attempt — MariaDB only runs `/docker-entrypoint-initdb.d/`

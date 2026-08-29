@@ -5,18 +5,18 @@ services:
       dockerfile: Dockerfile.db
     restart: unless-stopped
     environment:
-      # Deliberately using the :- (default) form and not the :? (required)
-      # form. Coolify interpolates this file during the BUILD phase using
-      # build-time.env, which contains only build variables — a "required"
-      # guard here aborts the build before it starts, even when the variable
-      # is correctly set as a runtime variable.
-      # If these end up empty at runtime, MariaDB's own entrypoint fails loudly
-      # with "Database is uninitialized and password option is not specified".
-      # Check `docker logs <db-container>`.
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}
+      # These have REAL fallback values, not empty ones. Coolify's variable
+      # plumbing has proven unreliable here — an empty value makes MariaDB
+      # refuse to initialise and crash-loop with "Database is uninitialized and
+      # password option is not specified". The :- form catches both unset AND
+      # empty, so the stack always comes up.
+      #
+      # Override them in Coolify (runtime variables, NOT build variables) and
+      # use the same value in conf/import/inter_conf.txt.
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-ragnarok_root_CHANGEME}
       MARIADB_DATABASE: ragnarok
       MARIADB_USER: ragnarok
-      MARIADB_PASSWORD: ${DB_PASSWORD:-}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-ragnarok_CHANGEME}
     volumes:
       - ragnarok-db:/var/lib/mysql
     healthcheck:
