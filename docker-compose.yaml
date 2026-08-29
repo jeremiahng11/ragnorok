@@ -1,0 +1,43 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ragnarok
+      MARIADB_USER: ragnarok
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ragnarok-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  rathena:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PACKETVER: ${PACKETVER}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Raw TCP — these bypass the Coolify proxy entirely.
+      - "6900:6900"   # login server
+      - "6121:6121"   # char server
+      - "5121:5121"   # map server
+    volumes:
+      - rathena-conf:/opt/rathena/conf/import
+      - rathena-logs:/opt/rathena/log
+
+volumes:
+  ragnarok-db:
+  rathena-conf:
+  rathena-logs:

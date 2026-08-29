@@ -1,0 +1,16 @@
+FROM debian:12-slim AS src
+
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+ && git clone --depth 1 https://github.com/rathena/rathena.git /src \
+ && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+
+FROM mariadb:11
+
+COPY --from=src /src/sql-files/ /sql/
+COPY db-init/ /docker-entrypoint-initdb.d/
+
+# Belt and braces: make sure the import script is executable even if the file
+# mode was lost somewhere between the working tree and the build context.
+RUN chmod +x /docker-entrypoint-initdb.d/*.sh
