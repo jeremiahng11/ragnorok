@@ -255,3 +255,51 @@ on an empty datadir. Delete the volume and redeploy:
 ```bash
 docker volume rm <project>_ragnarok-db
 ```
+
+## Post-deploy configuration (setup-conf.sh)
+
+`setup-conf.sh` writes every config file and rotates the inter-server account
+in one go. Edit the variables at the top first — at minimum `DB_PASSWORD`,
+`SERVER_NAME` and `PUBLIC_IP`.
+
+Copy it into the container and run it:
+
+```bash
+RA=$(sudo docker ps -qf name=rathena-jdci)
+sudo docker cp setup-conf.sh $RA:/tmp/
+sudo docker exec -it $RA bash /tmp/setup-conf.sh
+```
+
+It will:
+
+1. Verify it can reach the database as user `ragnarok` (aborts if not).
+2. Replace the default `s1`/`p1` inter-server account with a generated
+   username and random 20-character password, in the `login` table.
+3. Write `inter_conf.txt` pointing at host `db`, plus `char_conf.txt`,
+   `map_conf.txt`, `login_conf.txt` and `battle_conf.txt` using those same
+   credentials.
+4. Print the generated inter-server password — save it.
+
+The database update happens *before* the config files are written, so a
+failure cannot leave the configs referencing credentials that do not exist.
+
+Everything lands in `/opt/rathena/conf/import/`, which is a volume, so it
+survives redeploys. Re-running the script generates a fresh inter-server
+password and updates both places together.
+
+Restart the resource in Coolify afterwards.
+
+### PUBLIC_IP
+
+rAthena hands this address to clients for the char and map servers, so
+`127.0.0.1` breaks any non-local desktop client.
+
+| Playing via | Set PUBLIC_IP to |
+|---|---|
+| roBrowserLegacy in a browser | `127.0.0.1` (the WS proxy handles it) |
+| Desktop client on your LAN | your LAN IP, e.g. `192.168.1.10` |
+| Desktop client over the internet | public IP or DDNS hostname |
+
+For LAN and internet clients at the same time, also edit
+`conf/subnet_athena.conf` — but note that file is NOT in the import volume,
+so those edits are lost on redeploy.
