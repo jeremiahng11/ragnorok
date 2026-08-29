@@ -197,6 +197,20 @@ compiler. An OOM-killed g++ also surfaces as `make` exit code 2. Set
 Barely slower in practice — the long pole is a few huge translation units that
 cannot be parallelised anyway.
 
+### Coolify env vars: build vs runtime
+
+Coolify runs compose twice with different environment files:
+
+| Phase | Env file | Contains |
+|-------|----------|----------|
+| `build` | `build-time.env` | Only variables marked **Build Variable** |
+| `up -d` | `.env` | All variables |
+
+Compose interpolates the *whole* file in both phases. So a "required variable"
+guard (the `:?` form) on a runtime-only variable aborts the build before it
+starts. That is why `DB_ROOT_PASSWORD` and `DB_PASSWORD` use plain defaults
+here, and only `RO_PACKETVER` is a build variable.
+
 ### Client connects, then immediately disconnects
 
 `PACKETVER` does not match the client. It must equal the client's date exactly.
@@ -217,8 +231,8 @@ Common causes, in order of likelihood:
 
 1. **`DB_ROOT_PASSWORD` or `DB_PASSWORD` unset.** MariaDB refuses to initialise
    without a root password and exits immediately, which compose reports only as
-   "unhealthy". The compose file now uses `${DB_ROOT_PASSWORD:?...}` so this
-   aborts with a readable message instead.
+   "unhealthy". Add both under Environment Variables in Coolify. Leave them as
+   runtime variables — do NOT mark them as build variables.
 2. **Schema import failed.** `20-import.sh` now logs each file as it imports and
    prints table counts, so `docker logs` will show exactly where it stopped.
    Expected on success: `ragnarok tables: 60`, `ragnarok_logs tables: 10`.
