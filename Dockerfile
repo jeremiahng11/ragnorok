@@ -46,10 +46,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=build --chown=rathena:rathena /opt/rathena /opt/rathena
 
+COPY --chown=rathena:rathena docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 WORKDIR /opt/rathena
 USER rathena
 
 EXPOSE 6900 6121 5121
 
-# restart-fg keeps the servers in the foreground so Docker does not exit.
-CMD ["./athena-start", "restart-fg"]
+# NOT athena-start: it backgrounds every server and returns immediately, so the
+# container exits. It also has no foreground mode — the subcommands are
+# start|stop|restart|status|watch|help|val_runonce|valchk.
+CMD ["/usr/local/bin/docker-entrypoint.sh"]

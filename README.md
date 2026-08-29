@@ -303,3 +303,13 @@ rAthena hands this address to clients for the char and map servers, so
 For LAN and internet clients at the same time, also edit
 `conf/subnet_athena.conf` — but note that file is NOT in the import volume,
 so those edits are lost on redeploy.
+
+### Container logs show only `Usage: athena-start { start | stop | ... }`
+
+The image was using `athena-start` as its CMD. That script backgrounds every
+server (`./$1&`) and returns immediately, so the container exits and Docker
+restarts it in a loop. It has no foreground mode.
+
+Fixed by `docker-entrypoint.sh`, which starts login, char and map in order,
+forwards their output to container stdout, and exits if any one of them dies
+so the restart policy can act. Requires an image rebuild.
