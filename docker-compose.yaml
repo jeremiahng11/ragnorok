@@ -5,18 +5,24 @@ services:
       dockerfile: Dockerfile.db
     restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      # The :? guard makes compose abort with a readable message if these are
+      # unset, instead of MariaDB exiting at startup with "Database is
+      # uninitialized and password option is not specified" — which surfaces
+      # only as "container is unhealthy".
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is not set}
       MARIADB_DATABASE: ragnarok
       MARIADB_USER: ragnarok
-      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is not set}
     volumes:
       - ragnarok-db:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      # First boot imports the rAthena schema before the server accepts
+      # connections. Give it room; failures during start_period don't count.
+      start_period: 180s
 
   rathena:
     build:

@@ -200,3 +200,35 @@ cannot be parallelised anyway.
 ### Client connects, then immediately disconnects
 
 `PACKETVER` does not match the client. It must equal the client's date exactly.
+
+### `dependency failed to start: container db ... is unhealthy`
+
+The rAthena image built fine and the stack got as far as starting containers.
+This is the database, not the game server.
+
+Get the actual reason — Coolify does not show it:
+
+```bash
+docker ps -a --filter name=db- --format '{{.Names}}\t{{.Status}}'
+docker logs <db-container-name> 2>&1 | tail -40
+```
+
+Common causes, in order of likelihood:
+
+1. **`DB_ROOT_PASSWORD` or `DB_PASSWORD` unset.** MariaDB refuses to initialise
+   without a root password and exits immediately, which compose reports only as
+   "unhealthy". The compose file now uses `${DB_ROOT_PASSWORD:?...}` so this
+   aborts with a readable message instead.
+2. **Schema import failed.** `20-import.sh` now logs each file as it imports and
+   prints table counts, so `docker logs` will show exactly where it stopped.
+   Expected on success: `ragnarok tables: 60`, `ragnarok_logs tables: 10`.
+3. **Import slower than the healthcheck grace period.** `start_period` is now
+   180s. Failures during that window do not count against `retries`.
+
+If the volume was created during a failed first run, the schema init will NOT
+re-run on the next attempt — MariaDB only runs `/docker-entrypoint-initdb.d/`
+on an empty datadir. Delete the volume and redeploy:
+
+```bash
+docker volume rm <project>_ragnarok-db
+```
