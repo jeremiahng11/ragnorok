@@ -24,6 +24,7 @@ services:
       dockerfile: Dockerfile
       args:
         PACKETVER: ${PACKETVER}
+        BUILD_JOBS: ${BUILD_JOBS:-}
     restart: unless-stopped
     depends_on:
       db:

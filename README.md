@@ -9,8 +9,9 @@ Coolify on Debian 12.
 2. In Coolify: **Sources → GitHub** → install the Coolify GitHub App for this repo.
 3. **New Resource → Docker Compose**, select the repo, branch `main`,
    base directory `/`, compose file `docker-compose.yaml`.
-4. Add the environment variables from `.env.example`. `PACKETVER` must be
-   available at build time.
+4. Add the environment variables from `.env.example`. **`PACKETVER` must have
+   "Build Variable" enabled** — see Troubleshooting below. The two passwords
+   should stay runtime-only.
 5. Leave the FQDN / domain fields **empty** on both services. Ragnarok is raw
    TCP; if Traefik tries to route it, nothing will connect.
 6. Deploy. The first build takes 5–15 minutes — `make server` is the slow part.
@@ -151,3 +152,44 @@ Values are percentages — 100 is 1x.
 | 5121 | map     |
 
 MariaDB is not published — it is reachable only on the internal Coolify network.
+
+## Troubleshooting
+
+### Build fails at `make server` with exit code 2
+
+Almost always an empty `PACKETVER`. Coolify passes build args by name only:
+
+```
+--build-arg 'PACKETVER'
+```
+
+which means "inherit from the environment". If the variable is not marked as a
+**Build Variable** in Coolify, it arrives empty. The `sed` then writes a bare
+`#define PACKETVER` with no value, every `#if PACKETVER >= ...` in the codebase
+becomes a preprocessor error, and the build dies roughly ten minutes in with no
+useful message.
+
+Fix: Coolify → resource → Environment Variables → edit `PACKETVER` → enable
+**Build Variable**. The Dockerfile now validates this and fails in two seconds
+with a clear message instead.
+
+### Getting the real build error
+
+Coolify truncates build output. Run it by hand on the host:
+
+```bash
+cd /data/coolify/applications/<resource-uuid>
+docker build --progress=plain --build-arg PACKETVER=20180620 -t ratest . 2>&1 | tail -60
+```
+
+### g++ killed during the map-server compile
+
+`map.cpp`, `skill.cpp` and `status.cpp` each need well over 1 GB from the
+compiler. An OOM-killed g++ also surfaces as `make` exit code 2. Set
+`BUILD_JOBS=4` in the environment variables (build variable) and redeploy.
+Barely slower in practice — the long pole is a few huge translation units that
+cannot be parallelised anyway.
+
+### Client connects, then immediately disconnects
+
+`PACKETVER` does not match the client. It must equal the client's date exactly.
